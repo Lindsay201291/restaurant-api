@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -38,7 +37,7 @@ type Product struct {
 	Price float64 `json:"price,omitempty"`
 }
 
-//Transaction
+// Transaction
 type Transaction struct {
 	Uid      string    `json:"uid,omitempty"`
 	Buyer    buyer     `json:"buyer,omitempty"`
@@ -51,26 +50,24 @@ type Transaction struct {
 func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
 	{
 		// w.Write([]byte("Buyers list"))
-		resp, err := http.Get("https://kqxty15mpg.execute-api.us-east-1.amazonaws.com/buyers")
 
+		dg, cancel := getDgraphClient()
+		defer cancel()
+		txn := dg.NewReadOnlyTxn().BestEffort()
+		resp, err := txn.Query(context.Background(), `{  buyers(func: has(age)) {
+															name
+															age
+														} }`)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Fatal(err)
 		}
-
-		defer resp.Body.Close()
+		fmt.Println(string(resp.Json))
 
 		w.Header().Set("Content-Type", "application/json")
 
-		if _, err := io.Copy(w, resp.Body); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		w.WriteHeader(http.StatusOK)
+		w.Write(resp.Json)
 	}
-}
-
-func (t *Transaction) TransactionToJson() ([]byte, error) {
-	return json.Marshal(t)
 }
 
 func CreateTransaction(w http.ResponseWriter, r *http.Request) {
