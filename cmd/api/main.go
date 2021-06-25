@@ -18,6 +18,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Get("/buyers", GetAllBuyers)
+	r.Get("/buyer/{id}/purchase-history", GetPurchaseHistoryByBuyer)
 	r.Post("/transaction", CreateTransaction)
 
 	http.ListenAndServe(":3000", r)
@@ -48,26 +49,65 @@ type Transaction struct {
 }
 
 func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
-	{
-		// w.Write([]byte("Buyers list"))
+	// w.Write([]byte("Buyers list"))
 
-		dg, cancel := getDgraphClient()
-		defer cancel()
-		txn := dg.NewReadOnlyTxn().BestEffort()
-		resp, err := txn.Query(context.Background(), `{  buyers(func: has(age)) {
-															name
-															age
-														} }`)
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(string(resp.Json))
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	resp, err := txn.Query(context.Background(),
+		`{  buyers(func: has(age)) {
+			name
+			age
+		} }`)
 
-		w.Header().Set("Content-Type", "application/json")
-
-		w.WriteHeader(http.StatusOK)
-		w.Write(resp.Json)
+	if err != nil {
+		log.Fatal(err)
 	}
+
+	fmt.Println(string(resp.Json))
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
+}
+
+func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	query :=
+		`query all($a: string) {  
+			purchase_history(func: uid($a)) {
+				name
+				age
+				purchases : ~customer {
+				ip
+				device
+				includes {
+					name
+					price
+				}
+				date
+				}
+			} 
+		}`
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": id})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(string(resp.Json))
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
 }
 
 func CreateTransaction(w http.ResponseWriter, r *http.Request) {
