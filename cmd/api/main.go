@@ -19,6 +19,7 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Get("/buyers", GetAllBuyers)
 	r.Get("/buyer/{id}/purchase-history", GetPurchaseHistoryByBuyer)
+	r.Get("/transaction/date", GetTransactionsOfTheDay)
 	r.Post("/transaction", CreateTransaction)
 
 	http.ListenAndServe(":3000", r)
@@ -110,6 +111,45 @@ func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
 	w.Write(resp.Json)
 }
 
+func GetTransactionsOfTheDay(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	query :=
+		`query all($a: string) {
+			transactions_of_the_day(func: eq(date, $a)) {
+			  customer {
+				name
+				age
+			  }
+			  ip
+			  device
+			  includes {
+				  uid
+				  name
+				  price
+				}
+			  date
+			  }
+		  }`
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println(string(resp.Json))
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
+}
+
 func CreateTransaction(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
@@ -130,24 +170,6 @@ func CreateTransaction(w http.ResponseWriter, r *http.Request) {
 
 	txn := dg.NewTxn()
 	defer txn.Commit(ctx)
-
-	/* t := Transaction{
-		Uid: "1624147200",
-		Buyer: buyer{
-			Name: "Huba",
-			Age:  45,
-		},
-		Ip:     "32.66.100.154",
-		Device: "linux",
-		Products: []Product{{
-			Name:  "Chicken broth",
-			Price: 5095,
-		}, {
-			Name:  "Original ready rice",
-			Price: 3511,
-		}},
-		Date: (time.Now().UnixNano() / 1e6),
-	} */
 
 	lb, err := json.Marshal(transaction)
 	if err != nil {
