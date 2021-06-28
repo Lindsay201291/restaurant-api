@@ -33,6 +33,7 @@ func main() {
 	r.Get("/buyers", GetAllBuyers)
 	r.Get("/buyer/{id}/purchase-history", GetPurchaseHistoryByBuyer)
 	r.Get("/buyer/{id}/same-ip", GetOtherBuyersWithTheSameIp)
+	r.Get("/buyer/{id}/product-recomendations", GetProductRecomendations)
 	r.Get("/transaction/date", GetTransactionsOfTheDay)
 	r.Post("/transaction", CreateTransaction)
 
@@ -147,6 +148,49 @@ func GetOtherBuyersWithTheSameIp(w http.ResponseWriter, r *http.Request) {
 						ip
 					}
 				}
+			}
+		}`
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": id})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Println(string(resp.Json))
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
+}
+
+func GetProductRecomendations(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	query :=
+		`query all($a: string) {
+			var(func: uid($a)) {
+				~customer {
+					includes {
+						products as uid
+					}
+				}
+			}
+			q(func: has(ip), first: 5) @cascade {
+				ip
+				customer {
+				   name
+				   age
+				}
+				includes @filter(uid(products)) {
+				   name
+				   price
+				 }
 			}
 		}`
 
