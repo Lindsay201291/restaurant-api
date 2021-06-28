@@ -34,6 +34,7 @@ func main() {
 	r.Get("/buyer/{id}/purchase-history", GetPurchaseHistoryByBuyer)
 	r.Get("/buyer/{id}/same-ip", GetOtherBuyersWithTheSameIp)
 	r.Get("/buyer/{id}/product-recomendations", GetProductRecomendations)
+	r.Get("/buyer/date", GetBuyersOfTheDay)
 	r.Get("/product/date", GetProductsOfTheDay)
 	r.Get("/transaction/date", GetTransactionsOfTheDay)
 	r.Post("/transaction", CreateTransaction)
@@ -82,7 +83,37 @@ func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	// fmt.Println(string(resp.Json))
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
+}
+
+func GetBuyersOfTheDay(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	query :=
+		`query all($a: string) {
+			var(func: eq(date, $a)) {
+				customer {
+					customers as uid
+				}
+			}
+			q(func: uid(customers)) {
+				name
+				age
+			}
+		}`
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -120,8 +151,6 @@ func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	// fmt.Println(string(resp.Json))
-
 	w.Header().Set("Content-Type", "application/json")
 
 	w.WriteHeader(http.StatusOK)
@@ -158,8 +187,6 @@ func GetOtherBuyersWithTheSameIp(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// fmt.Println(string(resp.Json))
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -201,8 +228,6 @@ func GetProductRecomendations(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// fmt.Println(string(resp.Json))
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -272,8 +297,6 @@ func GetTransactionsOfTheDay(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	// fmt.Println(string(resp.Json))
 
 	w.Header().Set("Content-Type", "application/json")
 
