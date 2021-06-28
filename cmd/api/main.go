@@ -34,6 +34,7 @@ func main() {
 	r.Get("/buyer/{id}/purchase-history", GetPurchaseHistoryByBuyer)
 	r.Get("/buyer/{id}/same-ip", GetOtherBuyersWithTheSameIp)
 	r.Get("/buyer/{id}/product-recomendations", GetProductRecomendations)
+	r.Get("/product/date", GetProductsOfTheDay)
 	r.Get("/transaction/date", GetTransactionsOfTheDay)
 	r.Post("/transaction", CreateTransaction)
 
@@ -202,6 +203,38 @@ func GetProductRecomendations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// fmt.Println(string(resp.Json))
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
+}
+
+func GetProductsOfTheDay(w http.ResponseWriter, r *http.Request) {
+	date := r.URL.Query().Get("date")
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	query :=
+		`query all($a: string) {
+			var(func: eq(date, $a)) {
+				includes {
+					products as uid
+				}
+			}
+			q(func: uid(products)) {
+				name
+				price
+			}
+		}`
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
+
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 
