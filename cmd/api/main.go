@@ -21,8 +21,8 @@ func main() {
 
 	r.Use(cors.Handler(cors.Options{
 		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
-		AllowedOrigins: []string{"https://*", "http://*"},
-		// AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
+		AllowedOrigins:   []string{"https://*", "http://*"},
+		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
 		ExposedHeaders:   []string{"Link"},
@@ -32,6 +32,7 @@ func main() {
 
 	r.Get("/buyers", GetAllBuyers)
 	r.Get("/buyer/{id}/purchase-history", GetPurchaseHistoryByBuyer)
+	r.Get("/buyer/{id}/same-ip", GetOtherBuyersWithTheSameIp)
 	r.Get("/transaction/date", GetTransactionsOfTheDay)
 	r.Post("/transaction", CreateTransaction)
 
@@ -79,7 +80,7 @@ func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	fmt.Println(string(resp.Json))
+	// fmt.Println(string(resp.Json))
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -117,7 +118,46 @@ func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	fmt.Println(string(resp.Json))
+	// fmt.Println(string(resp.Json))
+
+	w.Header().Set("Content-Type", "application/json")
+
+	w.WriteHeader(http.StatusOK)
+	w.Write(resp.Json)
+}
+
+func GetOtherBuyersWithTheSameIp(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+	query :=
+		`query all($a: string) {
+			var(func: uid($a)) {
+				~customer {
+					ips as ip
+				}
+			}  
+			q(func: eq(ip, val(ips))) {
+				customer @filter (NOT uid($a)) {
+					uid
+					name
+					c : ~customer @filter (eq(ip, val(ips))) {
+						ip
+					}
+				}
+			}
+		}`
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": id})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// fmt.Println(string(resp.Json))
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -156,7 +196,7 @@ func GetTransactionsOfTheDay(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err)
 	}
 
-	fmt.Println(string(resp.Json))
+	// fmt.Println(string(resp.Json))
 
 	w.Header().Set("Content-Type", "application/json")
 
