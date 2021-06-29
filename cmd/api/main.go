@@ -2,11 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/go-chi/chi"
@@ -20,7 +17,7 @@ func main() {
 	r.Use(middleware.Logger)
 
 	r.Use(cors.Handler(cors.Options{
-		// AllowedOrigins:   []string{"https://foo.com"}, // Use this to allow specific origin hosts
+
 		AllowedOrigins:   []string{"https://*", "http://*"},
 		AllowOriginFunc:  func(r *http.Request, origin string) bool { return true },
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -37,7 +34,6 @@ func main() {
 	r.Get("/buyer/date", GetBuyersOfTheDay)
 	r.Get("/product/date", GetProductsOfTheDay)
 	r.Get("/transaction/date", GetTransactionsOfTheDay)
-	r.Post("/transaction", CreateTransaction)
 
 	http.ListenAndServe(":3000", r)
 }
@@ -66,22 +62,48 @@ type Transaction struct {
 	Date     int64     `json:"date,omitempty"`
 }
 
-func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
-	// w.Write([]byte("Buyers list"))
+func RunQueryWithVars(query string, pathVariable string) *api.Response {
 
+	date := pathVariable
 	dg, cancel := getDgraphClient()
 	defer cancel()
 	txn := dg.NewReadOnlyTxn().BestEffort()
-	resp, err := txn.Query(context.Background(),
-		`{  buyers(func: has(age)) {
-			uid
-			name
-			age
-		} }`)
+
+	ctx := context.Background()
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
 
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	return resp
+}
+
+func RunQuery(query string) *api.Response {
+
+	dg, cancel := getDgraphClient()
+	defer cancel()
+	txn := dg.NewReadOnlyTxn().BestEffort()
+
+	resp, err := txn.Query(context.Background(),
+		query)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return resp
+}
+
+func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
+
+	query := `{  buyers(func: has(age)) {
+		uid
+		name
+		age
+	} }`
+
+	resp := RunQuery(query)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -90,11 +112,8 @@ func GetAllBuyers(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetBuyersOfTheDay(w http.ResponseWriter, r *http.Request) {
-	date := r.URL.Query().Get("date")
 
-	dg, cancel := getDgraphClient()
-	defer cancel()
-	txn := dg.NewReadOnlyTxn().BestEffort()
+	date := r.URL.Query().Get("date")
 	query :=
 		`query all($a: string) {
 			var(func: eq(date, $a)) {
@@ -108,12 +127,7 @@ func GetBuyersOfTheDay(w http.ResponseWriter, r *http.Request) {
 			}
 		}`
 
-	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp := RunQueryWithVars(query, date)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -122,11 +136,8 @@ func GetBuyersOfTheDay(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
 
-	dg, cancel := getDgraphClient()
-	defer cancel()
-	txn := dg.NewReadOnlyTxn().BestEffort()
+	id := chi.URLParam(r, "id")
 	query :=
 		`query all($a: string) {  
 			purchase_history(func: uid($a)) {
@@ -144,12 +155,7 @@ func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
 			} 
 		}`
 
-	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": id})
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp := RunQueryWithVars(query, id)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -158,11 +164,8 @@ func GetPurchaseHistoryByBuyer(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetOtherBuyersWithTheSameIp(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
 
-	dg, cancel := getDgraphClient()
-	defer cancel()
-	txn := dg.NewReadOnlyTxn().BestEffort()
+	id := chi.URLParam(r, "id")
 	query :=
 		`query all($a: string) {
 			var(func: uid($a)) {
@@ -181,12 +184,7 @@ func GetOtherBuyersWithTheSameIp(w http.ResponseWriter, r *http.Request) {
 			}
 		}`
 
-	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": id})
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp := RunQueryWithVars(query, id)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -195,11 +193,8 @@ func GetOtherBuyersWithTheSameIp(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetProductRecomendations(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
 
-	dg, cancel := getDgraphClient()
-	defer cancel()
-	txn := dg.NewReadOnlyTxn().BestEffort()
+	id := chi.URLParam(r, "id")
 	query :=
 		`query all($a: string) {
 			var(func: uid($a)) {
@@ -222,12 +217,7 @@ func GetProductRecomendations(w http.ResponseWriter, r *http.Request) {
 			}
 		}`
 
-	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": id})
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp := RunQueryWithVars(query, id)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -236,11 +226,8 @@ func GetProductRecomendations(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetProductsOfTheDay(w http.ResponseWriter, r *http.Request) {
-	date := r.URL.Query().Get("date")
 
-	dg, cancel := getDgraphClient()
-	defer cancel()
-	txn := dg.NewReadOnlyTxn().BestEffort()
+	date := r.URL.Query().Get("date")
 	query :=
 		`query all($a: string) {
 			var(func: eq(date, $a)) {
@@ -254,12 +241,7 @@ func GetProductsOfTheDay(w http.ResponseWriter, r *http.Request) {
 			}
 		}`
 
-	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp := RunQueryWithVars(query, date)
 
 	w.Header().Set("Content-Type", "application/json")
 
@@ -268,11 +250,8 @@ func GetProductsOfTheDay(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetTransactionsOfTheDay(w http.ResponseWriter, r *http.Request) {
-	date := r.URL.Query().Get("date")
 
-	dg, cancel := getDgraphClient()
-	defer cancel()
-	txn := dg.NewReadOnlyTxn().BestEffort()
+	date := r.URL.Query().Get("date")
 	query :=
 		`query all($a: string) {
 			transactions_of_the_day(func: eq(date, $a)) {
@@ -291,60 +270,10 @@ func GetTransactionsOfTheDay(w http.ResponseWriter, r *http.Request) {
 			  }
 		  }`
 
-	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
-
-	if err != nil {
-		log.Fatal(err)
-	}
+	resp := RunQueryWithVars(query, date)
 
 	w.Header().Set("Content-Type", "application/json")
 
 	w.WriteHeader(http.StatusOK)
 	w.Write(resp.Json)
-}
-
-func CreateTransaction(w http.ResponseWriter, r *http.Request) {
-
-	decoder := json.NewDecoder(r.Body)
-	var transaction Transaction
-	err := decoder.Decode(&transaction)
-	if err != nil {
-		fmt.Fprintf(w, "error: %v", err)
-		return
-	}
-
-	fmt.Println(transaction.Device)
-	fmt.Println(transaction.Products)
-	transaction.Date = (time.Now().UnixNano() / 1e6)
-
-	ctx := context.TODO()
-	dg, cancel := getDgraphClient()
-	defer cancel()
-
-	txn := dg.NewTxn()
-	defer txn.Commit(ctx)
-
-	lb, err := json.Marshal(transaction)
-	if err != nil {
-		log.Fatal("failed to marshal ", err)
-	}
-
-	mu := &api.Mutation{
-		SetJson: lb,
-	}
-	res, err := txn.Mutate(ctx, mu)
-	if err != nil {
-		log.Fatal("failed to mutate ", err)
-	}
-
-	print("res: %v", res)
-
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-type", "application/json")
-
-	w.Write(lb)
 }
