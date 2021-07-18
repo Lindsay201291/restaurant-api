@@ -62,15 +62,14 @@ type Transaction struct {
 	Date     int64     `json:"date,omitempty"`
 }
 
-func RunQueryWithVars(query string, pathVariable string) *api.Response {
+func RunQueryWithVars(query string, variable string) *api.Response {
 
-	date := pathVariable
 	dg, cancel := getDgraphClient()
 	defer cancel()
 	txn := dg.NewReadOnlyTxn().BestEffort()
 
 	ctx := context.Background()
-	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": date})
+	resp, err := txn.QueryWithVars(ctx, query, map[string]string{"$a": variable})
 
 	if err != nil {
 		log.Fatal(err)
